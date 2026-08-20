@@ -8,3 +8,6 @@ keystore/
 
 # Personal dashboard - location, bin schedule and locale are site-specific
 web/
+
+# Full-size source for docs/wall.jpg
+sample.jpeg

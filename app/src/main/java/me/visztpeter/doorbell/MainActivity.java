@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
     private LinearLayout content;
     private LinearLayout cameraBlock;
     private View videoContainer;
+    private TextView muteHint;
     private View buttonBar;
 
     private Config config;
@@ -97,6 +98,12 @@ public class MainActivity extends Activity {
         content = findViewById(R.id.content);
         cameraBlock = findViewById(R.id.cameraBlock);
         videoContainer = findViewById(R.id.videoContainer);
+        muteHint = findViewById(R.id.muteHint);
+        // Tap the picture to toggle sound. The gear consumes its own taps, and a
+        // tap while dimmed is swallowed by dispatchTouchEvent as a wake instead.
+        videoContainer.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { toggleMute(); }
+        });
         buttonBar = findViewById(R.id.buttonBar);
 
         findViewById(R.id.settingsBtn).setOnClickListener(new View.OnClickListener() {
@@ -285,6 +292,26 @@ public class MainActivity extends Activity {
         int g = Math.round(((color >> 8) & 0xFF) * factor);
         int b = Math.round((color & 0xFF) * factor);
         return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
+    private final Runnable hideMuteHint = new Runnable() {
+        @Override public void run() { muteHint.setVisibility(View.GONE); }
+    };
+
+    /**
+     * There is no persistent speaker icon, so the state is announced briefly on
+     * every toggle - otherwise there would be no way to tell sound was on.
+     */
+    private void toggleMute() {
+        config.audioMuted = !config.audioMuted;
+        config.save(this);
+        appliedConfigHash = config.toJson().toString();   // do not re-apply on resume
+        video.applyVolume();
+
+        muteHint.setText(config.audioMuted ? "Muted" : "Sound on");
+        muteHint.setVisibility(View.VISIBLE);
+        ui.removeCallbacks(hideMuteHint);
+        ui.postDelayed(hideMuteHint, 1500L);
     }
 
     private void selectFeed(int index) {

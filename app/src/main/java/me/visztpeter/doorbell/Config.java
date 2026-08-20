@@ -51,6 +51,9 @@ public class Config {
      */
     public boolean cameraFirst = true;
 
+    /** Muted by default: a wall panel should not start talking on its own. */
+    public boolean audioMuted = true;
+
     /**
      * Scale video to cover the whole pane, cropping whatever overflows, rather
      * than letterboxing the full frame inside it.
@@ -148,6 +151,7 @@ public class Config {
         splitPercent = o.optInt("splitPercent", splitPercent);
         orientation = o.optString("orientation", orientation);
         cameraFirst = o.optBoolean("cameraFirst", cameraFirst);
+        audioMuted = o.optBoolean("audioMuted", audioMuted);
         videoFillPane = o.optBoolean("videoFillPane", videoFillPane);
         videoZoomPercent = o.optInt("videoZoomPercent", videoZoomPercent);
         activeBrightness = (float) o.optDouble("activeBrightness", activeBrightness);
@@ -182,6 +186,7 @@ public class Config {
             o.put("splitPercent", splitPercent);
             o.put("orientation", orientation);
             o.put("cameraFirst", cameraFirst);
+            o.put("audioMuted", audioMuted);
             o.put("videoFillPane", videoFillPane);
             o.put("videoZoomPercent", videoZoomPercent);
             o.put("activeBrightness", activeBrightness);

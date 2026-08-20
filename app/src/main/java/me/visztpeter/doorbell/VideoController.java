@@ -82,6 +82,7 @@ public class VideoController {
     public void setConfig(Config c) {
         this.config = c;
         applyScale();
+        applyVolume();
     }
 
     /** Called once the layout has been through a pass and is attached to the window. */
@@ -158,6 +159,23 @@ public class VideoController {
         }
     }
 
+    /**
+     * Volume only sticks once something is playing, so this is re-applied on the
+     * Playing event as well as on demand.
+     */
+    public void applyVolume() {
+        ui.post(new Runnable() {
+            @Override public void run() {
+                if (player == null) return;
+                try {
+                    player.setVolume(config.audioMuted ? 0 : 100);
+                } catch (Exception e) {
+                    Log.w(TAG, "setVolume failed", e);
+                }
+            }
+        });
+    }
+
     /** The pane changed size (rotation, or the split percentage moving). */
     public void onPaneResized() {
         applyScale();
@@ -213,6 +231,7 @@ public class VideoController {
                     lastFrameAt = System.currentTimeMillis();
                     report(null, false);
                     applyScale();       // the scale only sticks once a vout exists
+                    applyVolume();
                     break;
                 case MediaPlayer.Event.Vout:
                     applyScale();
