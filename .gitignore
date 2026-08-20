@@ -1,0 +1,10 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+keystore/
+
+# Personal dashboard - location, bin schedule and locale are site-specific
+web/

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One tree serves both orientations. `content` flips between vertical and
+  horizontal at runtime; `cameraBlock` always stacks the video above its button
+  strip. Vertical  -> camera block on top, web below (portrait wall mount).
+  Horizontal -> camera block left, web right (landscape wall mount).
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <LinearLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/cameraBlock"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="47"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:id="@+id/videoContainer"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="#000000">
+
+                <org.videolan.libvlc.util.VLCVideoLayout
+                    android:id="@+id/videoLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <TextView
+                    android:id="@+id/statusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:padding="12dp"
+                    android:background="#99000000"
+                    android:visibility="gone" />
+
+                <ImageButton
+                    android:id="@+id/settingsBtn"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="6dp"
+                    android:background="#66000000"
+                    android:contentDescription="@string/settings_title"
+                    android:src="@android:drawable/ic_menu_preferences" />
+
+                <TextView
+                    android:id="@+id/clockText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|start"
+                    android:layout_margin="8dp"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="14sp"
+                    android:shadowColor="#000000"
+                    android:shadowRadius="3"
+                    android:shadowDx="1"
+                    android:shadowDy="1" />
+            </FrameLayout>
+
+            <HorizontalScrollView
+                android:id="@+id/buttonBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#111318"
+                android:scrollbars="none"
+                android:fillViewport="true">
+
+                <LinearLayout
+                    android:id="@+id/buttonRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:padding="6dp" />
+            </HorizontalScrollView>
+        </LinearLayout>
+
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="53"
+            android:background="#000000" />
+    </LinearLayout>
+
+    <!-- Purely visual blackout; touch handling lives in dispatchTouchEvent. -->
+    <View
+        android:id="@+id/dimOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:visibility="gone" />
+</FrameLayout>

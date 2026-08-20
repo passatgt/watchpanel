@@ -1,0 +1,62 @@
+plugins { id 'com.android.application' }
+
+def signingProps = new Properties()
+def signingFile = rootProject.file('keystore/signing.properties')
+if (signingFile.exists()) {
+    signingFile.withInputStream { signingProps.load(it) }
+}
+def hasReleaseSigning = signingProps.containsKey('storeFile')
+
+android {
+    namespace 'me.visztpeter.doorbell'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "me.visztpeter.doorbell"
+        minSdk 22
+        // Target 22 on purpose: the wall tablet runs 5.1.1, and staying at 22
+        // keeps install-time permissions (no runtime grant flow for the camera).
+        targetSdk 22
+        versionCode 1
+        versionName "1.0"
+        ndk { abiFilters 'armeabi-v7a', 'arm64-v8a' }
+    }
+
+    signingConfigs {
+        release {
+            // Credentials live in keystore/signing.properties, which .gitignore
+            // excludes. Without it the build still works, signed with debug keys.
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(signingProps['storeFile'])
+                storePassword signingProps['storePassword']
+                keyAlias signingProps['keyAlias']
+                keyPassword signingProps['keyPassword']
+            }
+            // 5.1 predates APK Signature Scheme v2 (API 24), so v1 is mandatory.
+            enableV1Signing true
+            enableV2Signing true
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
+        }
+        release {
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packagingOptions { jniLibs { useLegacyPackaging true } }
+    lint { abortOnError false; disable += ["ExpiredTargetSdkVersion"] }
+}
+
+dependencies {
+    implementation 'org.videolan.android:libvlc-all:3.6.2'
+}

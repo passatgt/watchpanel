@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Native Holo, no AppCompat: nothing here needs a support-library theme. -->
+    <style name="WallTheme" parent="@android:style/Theme.Holo.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">#000000</item>
+    </style>
+</resources>
