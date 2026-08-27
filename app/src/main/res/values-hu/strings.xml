@@ -9,6 +9,7 @@
 
     <string name="hint_muted">Némítva</string>
     <string name="hint_sound_on">Hang bekapcsolva</string>
+    <string name="hint_reloading">Újratöltés…</string>
     <string name="hint_talking">Beszélhet…</string>
 
     <string name="talk_err_no_channel">A kamera nem támogatja a visszabeszélést</string>

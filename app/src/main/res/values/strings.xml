@@ -12,6 +12,7 @@
 
     <string name="hint_muted">Muted</string>
     <string name="hint_sound_on">Sound on</string>
+    <string name="hint_reloading">Reloading…</string>
     <string name="hint_talking">Talking…</string>
 
     <string name="talk_err_no_channel">Camera offers no talk-back</string>

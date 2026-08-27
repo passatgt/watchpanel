@@ -52,10 +52,30 @@ keyPassword=...
 | 1.3 GHz Cortex-A7 | Presence detection is luma frame-differencing, well under 1 ms/frame at 320×240. ML Kit would manage a few fps and pin a core. |
 | No AppCompat | Native `Theme.Holo.NoActionBar.Fullscreen`; only libVLC's transitive `androidx.annotation` is pulled in. |
 
+## Gestures
+
+The panel has no visible controls — nothing to press by accident, and nothing a
+visitor can wander into. Everything is a gesture:
+
+| Gesture | Does |
+|---|---|
+| **Tap the picture** | Toggle sound. Muted at startup |
+| **Hold the mic button** | Push-to-talk, for cameras with two-way audio enabled |
+| **5 taps, top-right of the web pane** | Open Settings |
+| **5 taps, top-left of the web pane** | Force reload of both the dashboard and the stream |
+| **Tap anywhere while dimmed** | Wake (the tap is swallowed, so it cannot press anything) |
+
+The five-tap gestures must land within three seconds and in the same corner.
+Taps pass through to the page underneath, so the dashboard keeps working
+normally for anyone not performing the gesture.
+
+Worth committing the Settings gesture to memory before enabling kiosk mode —
+it is the only way back in.
+
 ## Settings
 
-Reached with the gear icon in the corner of the camera pane. Everything lives in
-one JSON blob in SharedPreferences, so it survives app upgrades.
+Reached with five taps in the top-right corner of the web pane. Everything lives
+in one JSON blob in SharedPreferences, so it survives app upgrades.
 
 ### Camera feeds
 

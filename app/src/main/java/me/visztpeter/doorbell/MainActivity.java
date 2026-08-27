@@ -352,14 +352,19 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Settings has no visible control. Five taps in the top-right corner of the
-     * web pane opens it - deliberately awkward, because on a wall panel the only
-     * person who should reach settings is someone who knows the gesture.
+     * The panel has no visible controls. Five taps in a top corner of the web
+     * pane triggers a hidden action - deliberately awkward, because on a wall
+     * panel the only person who should reach these is one who knows the gesture.
+     *
+     *   top right -> settings
+     *   top left  -> force reload of both panes
      */
     private static final int SECRET_TAPS = 5;
     private static final long SECRET_WINDOW_MS = 3000L;
+    private static final int CORNER_NONE = -1, CORNER_LEFT = 0, CORNER_RIGHT = 1;
 
     private int secretTaps;
+    private int secretCorner = CORNER_NONE;
     private long secretFirstTapAt;
 
     private boolean handleSecretCorner(MotionEvent ev) {
@@ -368,22 +373,49 @@ public class MainActivity extends Activity {
         Rect r = new Rect();
         if (!webView.getGlobalVisibleRect(r)) return false;
 
-        // Top-right quarter-width, fifth-height of the web pane.
-        int cornerLeft = r.right - Math.max(dp(80), r.width() / 4);
-        int cornerBottom = r.top + Math.max(dp(80), r.height() / 5);
-        if (ev.getRawX() < cornerLeft || ev.getRawY() > cornerBottom) return false;
+        // A quarter of the pane's width, a fifth of its height, with a floor so
+        // the target stays reachable however the panes are split.
+        int cw = Math.max(dp(80), r.width() / 4);
+        int ch = Math.max(dp(80), r.height() / 5);
+        if (ev.getRawY() > r.top + ch) return false;
+
+        int corner;
+        if (ev.getRawX() >= r.right - cw) {
+            corner = CORNER_RIGHT;
+        } else if (ev.getRawX() <= r.left + cw) {
+            corner = CORNER_LEFT;
+        } else {
+            return false;
+        }
 
         long now = System.currentTimeMillis();
-        if (now - secretFirstTapAt > SECRET_WINDOW_MS) {
+        // Switching corners mid-sequence starts a fresh count rather than mixing.
+        if (corner != secretCorner || now - secretFirstTapAt > SECRET_WINDOW_MS) {
+            secretCorner = corner;
             secretTaps = 0;
             secretFirstTapAt = now;
         }
-        if (++secretTaps >= SECRET_TAPS) {
-            secretTaps = 0;
+        if (++secretTaps < SECRET_TAPS) return false;
+
+        secretTaps = 0;
+        secretCorner = CORNER_NONE;
+        if (corner == CORNER_RIGHT) {
             startActivity(new Intent(MainActivity.this, SettingsActivity.class));
-            return true;
+        } else {
+            forceReload();
         }
-        return false;
+        return true;
+    }
+
+    /**
+     * Full refresh of both panes: the thing to reach for when the dashboard has
+     * gone stale or the stream is wedged in a way the watchdog has not caught.
+     */
+    private void forceReload() {
+        showHint(getString(R.string.hint_reloading), 1500L);
+        webView.stopLoading();
+        webView.loadUrl(config.dashboardUrl);
+        selectFeed(activeFeedIndex);
     }
 
     private final Runnable hideMuteHint = new Runnable() {
