@@ -5,17 +5,22 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.content.res.ColorStateList;
+import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.graphics.Bitmap;
 import android.net.http.SslError;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.widget.ImageButton;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -48,10 +53,14 @@ public class MainActivity extends Activity {
     private LinearLayout cameraBlock;
     private View videoContainer;
     private TextView muteHint;
+    private ImageButton talkBtn;
+    private AudioBackchannel talk;
+    private ToneGenerator tones;
     private View buttonBar;
 
     private Config config;
     private String appliedConfigHash;
+    private String appliedLanguage;
     private VideoController video;
     private PresenceDetector presence;
 
@@ -83,6 +92,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        applyLocale(this, Config.load(this).language);
+        appliedLanguage = Config.load(this).language;
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
@@ -99,6 +110,33 @@ public class MainActivity extends Activity {
         cameraBlock = findViewById(R.id.cameraBlock);
         videoContainer = findViewById(R.id.videoContainer);
         muteHint = findViewById(R.id.muteHint);
+        talkBtn = findViewById(R.id.talkBtn);
+        talk = new AudioBackchannel(talkListener);
+        try {
+            // Synthesised rather than a bundled sound file: no asset, no decoding.
+            tones = new ToneGenerator(AudioManager.STREAM_MUSIC, 80);
+        } catch (RuntimeException e) {
+            tones = null;                     // some devices refuse; not fatal
+        }
+        // Push-to-talk rather than a latch: an open mic on a hallway wall is not
+        // something to leave running by accident.
+        talkBtn.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.setPressed(true);
+                        startTalking();
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        talk.stop();          // graceful: tail plays out
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        });
         // Tap the picture to toggle sound. The gear consumes its own taps, and a
         // tap while dimmed is swallowed by dispatchTouchEvent as a wake instead.
         videoContainer.setOnClickListener(new View.OnClickListener() {
@@ -135,6 +173,11 @@ public class MainActivity extends Activity {
         boolean feedsOrUrlChanged = appliedConfigHash == null
                 || !sameStreamingSetup(config, fresh);
 
+        if (appliedLanguage != null && !appliedLanguage.equals(fresh.language)) {
+            appliedLanguage = fresh.language;
+            recreate();                       // strings are baked in at inflate time
+            return;
+        }
         config = fresh;
         appliedConfigHash = hash;
         video.setConfig(config);
@@ -170,6 +213,20 @@ public class MainActivity extends Activity {
     }
 
     /** A wall bracket has one orientation; follow the setting, not the sensor. */
+    /**
+     * Overrides the device locale for this app only. Deprecated since API 25 but
+     * this targets 22, where it is the supported route.
+     */
+    static void applyLocale(android.content.Context ctx, String language) {
+        if (language == null || "system".equals(language)) return;
+        Locale locale = new Locale(language);
+        Locale.setDefault(locale);
+        Resources res = ctx.getResources();
+        Configuration cfg = res.getConfiguration();
+        cfg.locale = locale;
+        res.updateConfiguration(cfg, res.getDisplayMetrics());
+    }
+
     private void applyOrientation() {
         String o = config.orientation == null ? "portrait" : config.orientation;
         if ("landscape".equals(o)) {
@@ -294,6 +351,41 @@ public class MainActivity extends Activity {
         return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
+    /**
+     * Settings has no visible control. Five taps in the top-right corner of the
+     * web pane opens it - deliberately awkward, because on a wall panel the only
+     * person who should reach settings is someone who knows the gesture.
+     */
+    private static final int SECRET_TAPS = 5;
+    private static final long SECRET_WINDOW_MS = 3000L;
+
+    private int secretTaps;
+    private long secretFirstTapAt;
+
+    private boolean handleSecretCorner(MotionEvent ev) {
+        if (ev.getAction() != MotionEvent.ACTION_DOWN) return false;
+
+        Rect r = new Rect();
+        if (!webView.getGlobalVisibleRect(r)) return false;
+
+        // Top-right quarter-width, fifth-height of the web pane.
+        int cornerLeft = r.right - Math.max(dp(80), r.width() / 4);
+        int cornerBottom = r.top + Math.max(dp(80), r.height() / 5);
+        if (ev.getRawX() < cornerLeft || ev.getRawY() > cornerBottom) return false;
+
+        long now = System.currentTimeMillis();
+        if (now - secretFirstTapAt > SECRET_WINDOW_MS) {
+            secretTaps = 0;
+            secretFirstTapAt = now;
+        }
+        if (++secretTaps >= SECRET_TAPS) {
+            secretTaps = 0;
+            startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            return true;
+        }
+        return false;
+    }
+
     private final Runnable hideMuteHint = new Runnable() {
         @Override public void run() { muteHint.setVisibility(View.GONE); }
     };
@@ -308,17 +400,63 @@ public class MainActivity extends Activity {
         appliedConfigHash = config.toJson().toString();   // do not re-apply on resume
         video.applyVolume();
 
-        muteHint.setText(config.audioMuted ? "Muted" : "Sound on");
-        muteHint.setVisibility(View.VISIBLE);
-        ui.removeCallbacks(hideMuteHint);
-        ui.postDelayed(hideMuteHint, 1500L);
+        showHint(getString(config.audioMuted ? R.string.hint_muted : R.string.hint_sound_on), 1500L);
     }
 
     private void selectFeed(int index) {
         if (index < 0 || index >= config.feeds.size()) return;
         activeFeedIndex = index;
         highlightActiveButton();
-        video.play(config.feeds.get(index).url);
+        Config.Feed feed = config.feeds.get(index);
+        String url = feed.url;
+
+        // Talk-back needs RTSP and has to be enabled for this particular camera.
+        talk.cancel();
+        boolean canTalk = feed.talk && url.toLowerCase().startsWith("rtsp://");
+        talkBtn.setVisibility(canTalk ? View.VISIBLE : View.GONE);
+
+        video.play(url);
+    }
+
+    private void startTalking() {
+        if (config.feeds.isEmpty()) return;
+        resetIdleTimer();
+        talk.start(config.feeds.get(activeFeedIndex).url);
+    }
+
+    private final AudioBackchannel.Listener talkListener = new AudioBackchannel.Listener() {
+        @Override public void onTalkState(final boolean active, final int errorResId) {
+            ui.post(new Runnable() {
+                @Override public void run() {
+                    if (errorResId != 0) {
+                        showHint(getString(errorResId), 2500L);
+                    } else if (active) {
+                        playReadyCue();
+                        showHint(getString(R.string.hint_talking), 0L);
+                    } else {
+                        ui.removeCallbacks(hideMuteHint);
+                        muteHint.setVisibility(View.GONE);
+                    }
+                }
+            });
+        }
+    };
+
+    /** Short beep marking the moment the channel is open and the mic goes live. */
+    private void playReadyCue() {
+        if (tones == null) return;
+        try {
+            tones.startTone(ToneGenerator.TONE_PROP_BEEP, 120);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    /** Shared transient overlay; timeout of 0 leaves it up until replaced. */
+    private void showHint(String text, long timeoutMs) {
+        muteHint.setText(text);
+        muteHint.setVisibility(View.VISIBLE);
+        ui.removeCallbacks(hideMuteHint);
+        if (timeoutMs > 0) ui.postDelayed(hideMuteHint, timeoutMs);
     }
 
     private void highlightActiveButton() {
@@ -367,6 +505,9 @@ public class MainActivity extends Activity {
             return true;
         }
         resetIdleTimer();
+        // Counted first, but still passed through, so the page underneath keeps
+        // working normally for anyone not performing the gesture.
+        if (handleSecretCorner(ev)) return true;
         return super.dispatchTouchEvent(ev);
     }
 
@@ -412,7 +553,7 @@ public class MainActivity extends Activity {
                     handler.proceed();
                 } else {
                     handler.cancel();
-                    toast("Dashboard SSL rejected - enable the override in Settings");
+                    toast(getString(R.string.ssl_rejected));
                 }
             }
 
@@ -439,6 +580,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        talk.cancel();
         presence.stop();
         video.pause();
     }
@@ -446,6 +588,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         ui.removeCallbacksAndMessages(null);
+        talk.cancel();
+        if (tones != null) {
+            tones.release();
+            tones = null;
+        }
         presence.stop();
         video.release();
         super.onDestroy();
@@ -484,11 +631,11 @@ public class MainActivity extends Activity {
 
     private final VideoController.StatusListener statusListener =
             new VideoController.StatusListener() {
-                @Override public void onStatus(String text, boolean isError) {
-                    if (text == null) {
+                @Override public void onStatus(int resId, boolean isError) {
+                    if (resId == 0) {
                         statusText.setVisibility(View.GONE);
                     } else {
-                        statusText.setText(text);
+                        statusText.setText(resId);
                         statusText.setGravity(Gravity.CENTER);
                         statusText.setVisibility(View.VISIBLE);
                     }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Beállítások</string>
+    <string name="talk">Nyomva tartva beszélhet</string>
+
+    <string name="status_connecting">Csatlakozás…</string>
+    <string name="status_no_camera">A kamera nem érhető el</string>
+    <string name="status_stalled">Megszakadt az adás — újracsatlakozás</string>
+
+    <string name="hint_muted">Némítva</string>
+    <string name="hint_sound_on">Hang bekapcsolva</string>
+    <string name="hint_talking">Beszélhet…</string>
+
+    <string name="talk_err_no_channel">A kamera nem támogatja a visszabeszélést</string>
+    <string name="talk_err_no_mic">A mikrofon nem érhető el</string>
+    <string name="talk_err_refused">A visszabeszélés elutasítva</string>
+    <string name="talk_err_setup">A visszabeszélés beállítása sikertelen</string>
+    <string name="talk_err_play">A visszabeszélés nem indult el</string>
+
+    <string name="ssl_rejected">Érvénytelen tanúsítvány — engedélyezze a beállításokban</string>
+</resources>

@@ -47,6 +47,19 @@
                     android:background="#99000000"
                     android:visibility="gone" />
 
+                <ImageButton
+                    android:id="@+id/talkBtn"
+                    android:layout_width="76dp"
+                    android:layout_height="76dp"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="14dp"
+                    android:padding="18dp"
+                    android:scaleType="fitCenter"
+                    android:background="@drawable/talk_button"
+                    android:contentDescription="@string/talk"
+                    android:visibility="gone"
+                    android:src="@android:drawable/ic_btn_speak_now" />
+
                 <TextView
                     android:id="@+id/muteHint"
                     android:layout_width="wrap_content"
@@ -66,6 +79,7 @@
                     android:layout_margin="6dp"
                     android:background="#66000000"
                     android:contentDescription="@string/settings_title"
+                    android:visibility="gone"
                     android:src="@android:drawable/ic_menu_preferences" />
 
                 <TextView

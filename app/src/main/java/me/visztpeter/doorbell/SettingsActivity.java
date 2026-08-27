@@ -30,10 +30,16 @@ public class SettingsActivity extends Activity {
     private Config config;
 
     private LinearLayout feedList;
-    private final List<EditText[]> feedRows = new ArrayList<>();
+    private final List<FeedRow> feedRows = new ArrayList<>();
+
+    /** The widgets making up one feed's block in the form. */
+    private static class FeedRow {
+        EditText name, url;
+        CheckBox talk;
+    }
 
     private EditText dashboardUrl, splitPercent, dimTimeout, activeBrightness, dimBrightness;
-    private RadioGroup orientationGroup, cameraPosGroup;
+    private RadioGroup orientationGroup, cameraPosGroup, languageGroup;
     private EditText activeColor, inactiveColor;
     private EditText motionThreshold, motionArea, webReload, networkCaching, videoZoom;
     private CheckBox presenceEnabled, pauseWhenDim, ignoreSsl, rtspTcp, kioskMode, videoFill;
@@ -44,6 +50,7 @@ public class SettingsActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         config = Config.load(this);
+        MainActivity.applyLocale(this, config.language);
         kioskWasEnabled = config.kioskMode;
 
         ScrollView scroll = new ScrollView(this);
@@ -51,6 +58,10 @@ public class SettingsActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        // Without this the first EditText takes focus on entry and the IME
+        // covers half the form before you have touched anything.
+        root.setFocusable(true);
+        root.setFocusableInTouchMode(true);
         int pad = dp(16);
         root.setPadding(pad, pad, pad, pad);
         scroll.addView(root);
@@ -59,14 +70,20 @@ public class SettingsActivity extends Activity {
         feedList = new LinearLayout(this);
         feedList.setOrientation(LinearLayout.VERTICAL);
         root.addView(feedList);
-        for (Config.Feed f : config.feeds) addFeedRow(f.name, f.url);
+        for (Config.Feed f : config.feeds) addFeedRow(f.name, f.url, f.talk);
 
         Button addFeed = new Button(this);
         addFeed.setText("+ Add feed");
         addFeed.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { addFeedRow("", "rtsp://"); }
+            @Override public void onClick(View v) { addFeedRow("", "rtsp://", true); }
         });
         root.addView(addFeed);
+
+        languageGroup = radioRow(root, "Language / Nyelv",
+                new String[]{"system", "en", "hu"},
+                new String[]{"System", "English", "Magyar"},
+                config.language,
+                "Applies to the on-screen overlays; this settings screen stays English.");
 
         header(root, "Dashboard");
         dashboardUrl = textRow(root, "Web page URL", config.dashboardUrl, InputType.TYPE_TEXT_VARIATION_URI);
@@ -132,17 +149,20 @@ public class SettingsActivity extends Activity {
         root.addView(save);
 
         setContentView(scroll);
+        root.requestFocus();
     }
 
     private void save() {
         config.feeds.clear();
-        for (EditText[] row : feedRows) {
-            String name = row[0].getText().toString().trim();
-            String url = row[1].getText().toString().trim();
+        for (FeedRow row : feedRows) {
+            String name = row.name.getText().toString().trim();
+            String url = row.url.getText().toString().trim();
             if (url.isEmpty() || "rtsp://".equals(url)) continue;
-            config.feeds.add(new Config.Feed(name.isEmpty() ? "Camera" : name, url));
+            config.feeds.add(new Config.Feed(name.isEmpty() ? "Camera" : name,
+                    url, row.talk.isChecked()));
         }
 
+        config.language = readRadio(languageGroup, config.language);
         config.dashboardUrl = dashboardUrl.getText().toString().trim();
         config.webReloadSec = readInt(webReload, config.webReloadSec, 0, 86400);
         config.ignoreSslErrors = ignoreSsl.isChecked();
@@ -181,10 +201,13 @@ public class SettingsActivity extends Activity {
 
     // ------------------------------------------------------------ row builders
 
-    private void addFeedRow(String name, String url) {
-        final LinearLayout row = new LinearLayout(this);
+    private void addFeedRow(String name, String url, boolean talk) {
+        final LinearLayout block = new LinearLayout(this);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(0, dp(6), 0, dp(10));
+
+        LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(0, dp(4), 0, dp(4));
 
         final EditText nameField = new EditText(this);
         nameField.setHint("Name");
@@ -205,18 +228,39 @@ public class SettingsActivity extends Activity {
 
         Button remove = new Button(this);
         remove.setText("X");
-        final EditText[] entry = new EditText[]{nameField, urlField};
-        remove.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                feedRows.remove(entry);
-                feedList.removeView(row);
-            }
-        });
 
         row.addView(nameField);
         row.addView(urlField);
         row.addView(remove);
-        feedList.addView(row);
+        block.addView(row);
+
+        final CheckBox talkBox = new CheckBox(this);
+        talkBox.setText("Two-way audio (push to talk)");
+        talkBox.setChecked(talk);
+        talkBox.setTextColor(0xFFAAB6C2);
+        talkBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        block.addView(talkBox);
+
+        TextView hint = new TextView(this);
+        hint.setText("Needs an RTSP camera with an ONVIF audio backchannel.");
+        hint.setTextColor(0xFF8899AA);
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        hint.setPadding(dp(32), 0, 0, 0);
+        block.addView(hint);
+
+        final FeedRow entry = new FeedRow();
+        entry.name = nameField;
+        entry.url = urlField;
+        entry.talk = talkBox;
+
+        remove.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                feedRows.remove(entry);
+                feedList.removeView(block);
+            }
+        });
+
+        feedList.addView(block);
         feedRows.add(entry);
     }
 
@@ -246,8 +290,7 @@ public class SettingsActivity extends Activity {
             final int c = SWATCHES[i];
             View sw = new View(this);
             sw.setBackgroundDrawable(swatch(c));
-            LinearLayout.LayoutParams lp =
-                    new LinearLayout.LayoutParams(0, dp(34), 1f);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(34), 1f);
             lp.setMargins(dp(2), dp(4), dp(2), dp(4));
             sw.setLayoutParams(lp);
             sw.setOnClickListener(new View.OnClickListener() {
@@ -260,7 +303,6 @@ public class SettingsActivity extends Activity {
         }
         parent.addView(strip);
 
-        // Hex field with a live preview of whatever is typed.
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);

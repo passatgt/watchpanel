@@ -21,9 +21,17 @@ public class Config {
         public String name;
         public String url;
 
-        public Feed(String name, String url) {
+        /**
+         * Whether this camera accepts an ONVIF audio backchannel. Declared per
+         * feed rather than probed: probing costs a round-trip on every switch,
+         * and you already know which of your cameras can talk back.
+         */
+        public boolean talk;
+
+        public Feed(String name, String url, boolean talk) {
             this.name = name;
             this.url = url;
+            this.talk = talk;
         }
     }
 
@@ -53,6 +61,9 @@ public class Config {
 
     /** Muted by default: a wall panel should not start talking on its own. */
     public boolean audioMuted = true;
+
+    /** "system", "en" or "hu". Applies to the on-screen overlays. */
+    public String language = "system";
 
     /**
      * Scale video to cover the whole pane, cropping whatever overflows, rather
@@ -130,7 +141,8 @@ public class Config {
         Config c = new Config();
         String raw = sp.getString(KEY, null);
         if (raw == null) {
-            c.feeds.add(new Feed("Doorbell", "rtsp://user:pass@192.168.1.50:554/h264Preview_01_main"));
+            c.feeds.add(new Feed("Doorbell",
+                    "rtsp://user:pass@192.168.1.50:554/h264Preview_01_main", true));
             return c;
         }
         try {
@@ -152,6 +164,7 @@ public class Config {
         orientation = o.optString("orientation", orientation);
         cameraFirst = o.optBoolean("cameraFirst", cameraFirst);
         audioMuted = o.optBoolean("audioMuted", audioMuted);
+        language = o.optString("language", language);
         videoFillPane = o.optBoolean("videoFillPane", videoFillPane);
         videoZoomPercent = o.optInt("videoZoomPercent", videoZoomPercent);
         activeBrightness = (float) o.optDouble("activeBrightness", activeBrightness);
@@ -174,7 +187,8 @@ public class Config {
         if (arr != null) {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject f = arr.getJSONObject(i);
-                feeds.add(new Feed(f.optString("name", "Cam " + (i + 1)), f.optString("url", "")));
+                feeds.add(new Feed(f.optString("name", "Cam " + (i + 1)),
+                        f.optString("url", ""), f.optBoolean("talk", true)));
             }
         }
     }
@@ -187,6 +201,7 @@ public class Config {
             o.put("orientation", orientation);
             o.put("cameraFirst", cameraFirst);
             o.put("audioMuted", audioMuted);
+            o.put("language", language);
             o.put("videoFillPane", videoFillPane);
             o.put("videoZoomPercent", videoZoomPercent);
             o.put("activeBrightness", activeBrightness);
@@ -209,6 +224,7 @@ public class Config {
                 JSONObject fo = new JSONObject();
                 fo.put("name", f.name);
                 fo.put("url", f.url);
+                fo.put("talk", f.talk);
                 arr.put(fo);
             }
             o.put("feeds", arr);

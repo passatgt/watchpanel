@@ -29,7 +29,9 @@ import java.util.ArrayList;
 public class VideoController {
 
     public interface StatusListener {
-        void onStatus(String text, boolean isError);
+        /** {@code resId} of 0 clears the overlay. Ids rather than strings so the
+         *  controller needs no Context and the caller controls the language. */
+        void onStatus(int resId, boolean isError);
     }
 
     private static final String TAG = "VideoController";
@@ -64,7 +66,7 @@ public class VideoController {
             if (wantPlaying && lastFrameAt > 0
                     && System.currentTimeMillis() - lastFrameAt > STALL_TIMEOUT_MS) {
                 Log.w(TAG, "stream stalled, restarting");
-                report("Stream stalled - reconnecting", true);
+                report(R.string.status_stalled, true);
                 scheduleReconnect();
             }
             ui.postDelayed(this, 4_000L);
@@ -199,7 +201,7 @@ public class VideoController {
 
         releasePlayer();
         ensureLibVlc();
-        report("Connecting...", false);
+        report(R.string.status_connecting, false);
 
         player = new MediaPlayer(libVlc);
         player.setEventListener(eventListener);
@@ -229,7 +231,7 @@ public class VideoController {
                 case MediaPlayer.Event.Playing:
                     retryIndex = 0;
                     lastFrameAt = System.currentTimeMillis();
-                    report(null, false);
+                    report(0, false);
                     applyScale();       // the scale only sticks once a vout exists
                     applyVolume();
                     break;
@@ -245,7 +247,7 @@ public class VideoController {
                     if (event.getBuffering() < 100f) lastFrameAt = System.currentTimeMillis();
                     break;
                 case MediaPlayer.Event.EncounteredError:
-                    report("Cannot reach camera", true);
+                    report(R.string.status_no_camera, true);
                     scheduleReconnect();
                     break;
                 case MediaPlayer.Event.EndReached:
@@ -282,10 +284,10 @@ public class VideoController {
         player = null;
     }
 
-    private void report(final String text, final boolean isError) {
+    private void report(final int resId, final boolean isError) {
         if (listener == null) return;
         ui.post(new Runnable() {
-            @Override public void run() { listener.onStatus(text, isError); }
+            @Override public void run() { listener.onStatus(resId, isError); }
         });
     }
 }

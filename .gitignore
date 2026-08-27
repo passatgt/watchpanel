@@ -11,3 +11,6 @@ web/
 
 # Full-size source for docs/wall.jpg
 sample.jpeg
+
+# Built APKs are attached to GitHub Releases, not committed
+*.apk

@@ -2,4 +2,23 @@
 <resources>
     <string name="app_name">WatchPanel</string>
     <string name="settings_title">Settings</string>
+    <string name="talk">Push to talk</string>
+
+    <!-- On-screen overlays. Settings itself stays English: it is the admin
+         surface, seen once during setup, not the panel you live with. -->
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_no_camera">Cannot reach camera</string>
+    <string name="status_stalled">Stream stalled — reconnecting</string>
+
+    <string name="hint_muted">Muted</string>
+    <string name="hint_sound_on">Sound on</string>
+    <string name="hint_talking">Talking…</string>
+
+    <string name="talk_err_no_channel">Camera offers no talk-back</string>
+    <string name="talk_err_no_mic">Microphone unavailable</string>
+    <string name="talk_err_refused">Talk-back refused</string>
+    <string name="talk_err_setup">Talk-back setup failed</string>
+    <string name="talk_err_play">Talk-back could not start</string>
+
+    <string name="ssl_rejected">Certificate rejected — allow it in Settings</string>
 </resources>
