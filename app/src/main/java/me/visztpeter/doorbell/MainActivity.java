@@ -20,6 +20,8 @@ import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.view.View;
 import android.view.ViewGroup;
@@ -56,6 +58,13 @@ public class MainActivity extends Activity {
     private ImageButton talkBtn;
     private AudioBackchannel talk;
     private ToneGenerator tones;
+    private ImageButton frameBtn;
+    private ImageButton lockBtn;
+    private boolean unlockFired;
+    private AdminServer admin;
+    private ScaleGestureDetector pinch;
+    private boolean framing;
+    private float dragLastX, dragLastY;
     private View buttonBar;
 
     private Config config;
@@ -111,6 +120,39 @@ public class MainActivity extends Activity {
         videoContainer = findViewById(R.id.videoContainer);
         muteHint = findViewById(R.id.muteHint);
         talkBtn = findViewById(R.id.talkBtn);
+        frameBtn = findViewById(R.id.frameBtn);
+        lockBtn = findViewById(R.id.lockBtn);
+        // Hold, not tap: a gate button on a hallway wall is exactly what a child
+        // or a passing elbow triggers. Releasing early cancels.
+        lockBtn.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        unlockFired = false;
+                        v.setPressed(true);
+                        resetIdleTimer();
+                        showHint(getString(R.string.unlock_hold), 0L);
+                        ui.postDelayed(unlockTask, UNLOCK_HOLD_MS);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        ui.removeCallbacks(unlockTask);
+                        if (!unlockFired) {
+                            ui.removeCallbacks(hideMuteHint);
+                            muteHint.setVisibility(View.GONE);
+                        }
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        });
+        frameBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { toggleFraming(); }
+        });
+        pinch = new ScaleGestureDetector(this, pinchListener);
+        admin = new AdminServer(this, adminListener);
         talk = new AudioBackchannel(talkListener);
         try {
             // Synthesised rather than a bundled sound file: no asset, no decoding.
@@ -198,6 +240,7 @@ public class MainActivity extends Activity {
         if (config.webReloadSec > 0) ui.postDelayed(webReloadTask, config.webReloadSec * 1000L);
 
         applyKioskComponent(config.kioskMode);
+        applyAdminServer();
         setDimmed(false);
     }
 
@@ -254,7 +297,10 @@ public class MainActivity extends Activity {
         setPaneWeight(webView, 100 - percent, landscape);
         content.requestLayout();
         videoContainer.post(new Runnable() {
-            @Override public void run() { video.onPaneResized(); }
+            @Override public void run() {
+                video.onPaneResized();
+                applyVideoFraming();
+            }
         });
     }
 
@@ -411,6 +457,102 @@ public class MainActivity extends Activity {
      * Full refresh of both panes: the thing to reach for when the dashboard has
      * gone stale or the stream is wedged in a way the watchdog has not caught.
      */
+    // ------------------------------------------------------------- framing
+
+    /**
+     * Zoom enlarges the video's container past the pane and pan slides it, with
+     * the parent clipping the overflow. Nothing here touches the stream, so it
+     * costs nothing once set and works even when libVLC will not report the
+     * source's dimensions.
+     */
+    private void applyVideoFraming() {
+        int cw = videoContainer.getWidth(), ch = videoContainer.getHeight();
+        if (cw == 0 || ch == 0) return;
+
+        float zoom = clamp(config.videoZoom, 1f, 4f);
+        int w = Math.round(cw * zoom), h = Math.round(ch * zoom);
+
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) videoLayout.getLayoutParams();
+        lp.width = w;
+        lp.height = h;
+        lp.gravity = Gravity.TOP | Gravity.START;
+
+        int slackX = (w - cw) / 2, slackY = (h - ch) / 2;
+        lp.leftMargin = -slackX + Math.round(clamp(config.videoPanX, -1f, 1f) * slackX);
+        lp.topMargin = -slackY + Math.round(clamp(config.videoPanY, -1f, 1f) * slackY);
+        videoLayout.setLayoutParams(lp);
+    }
+
+    private void toggleFraming() {
+        framing = !framing;
+        frameBtn.setImageResource(framing
+                ? android.R.drawable.ic_menu_save : android.R.drawable.ic_menu_crop);
+        if (framing) {
+            showHint(getString(R.string.frame_editing), 0L);
+        } else {
+            config.save(this);
+            appliedConfigHash = config.toJson().toString();
+            showHint(getString(R.string.frame_saved), 1200L);
+        }
+    }
+
+    private final ScaleGestureDetector.OnScaleGestureListener pinchListener =
+            new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                @Override public boolean onScale(ScaleGestureDetector d) {
+                    config.videoZoom = clamp(config.videoZoom * d.getScaleFactor(), 1f, 4f);
+                    applyVideoFraming();
+                    return true;
+                }
+            };
+
+    /** Consumes touches while framing so nothing else reacts to the gesture. */
+    private boolean handleFramingTouch(MotionEvent ev) {
+        Rect r = new Rect();
+        if (!videoContainer.getGlobalVisibleRect(r)) return false;
+        if (!r.contains((int) ev.getRawX(), (int) ev.getRawY())) return false;
+
+        pinch.onTouchEvent(ev);
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                dragLastX = ev.getRawX();
+                dragLastY = ev.getRawY();
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (!pinch.isInProgress()) {
+                    int slackX = Math.max(1, Math.round(r.width() * (config.videoZoom - 1f) / 2f));
+                    int slackY = Math.max(1, Math.round(r.height() * (config.videoZoom - 1f) / 2f));
+                    config.videoPanX = clamp(config.videoPanX
+                            + (ev.getRawX() - dragLastX) / slackX, -1f, 1f);
+                    config.videoPanY = clamp(config.videoPanY
+                            + (ev.getRawY() - dragLastY) / slackY, -1f, 1f);
+                    dragLastX = ev.getRawX();
+                    dragLastY = ev.getRawY();
+                    applyVideoFraming();
+                }
+                break;
+            default:
+                break;
+        }
+        return true;
+    }
+
+    private static float clamp(float v, float lo, float hi) {
+        return v < lo ? lo : (v > hi ? hi : v);
+    }
+
+    private final AdminServer.Listener adminListener = new AdminServer.Listener() {
+        @Override public void onConfigChanged() {
+            ui.post(new Runnable() {
+                @Override public void run() { applyConfig(true); }
+            });
+        }
+    };
+
+    private void applyAdminServer() {
+        admin.stop();
+        if (config.adminEnabled) admin.start(config.adminPort, config.adminPin);
+    }
+
     private void forceReload() {
         showHint(getString(R.string.hint_reloading), 1500L);
         webView.stopLoading();
@@ -447,6 +589,10 @@ public class MainActivity extends Activity {
         boolean canTalk = feed.talk && url.toLowerCase().startsWith("rtsp://");
         talkBtn.setVisibility(canTalk ? View.VISIBLE : View.GONE);
 
+        ui.removeCallbacks(unlockTask);
+        boolean hasLock = feed.lockHost != null && !feed.lockHost.trim().isEmpty();
+        lockBtn.setVisibility(hasLock ? View.VISIBLE : View.GONE);
+
         video.play(url);
     }
 
@@ -475,6 +621,50 @@ public class MainActivity extends Activity {
     };
 
     /** Short beep marking the moment the channel is open and the mic goes live. */
+    // ---------------------------------------------------------------- door
+
+    private static final long UNLOCK_HOLD_MS = 1000L;
+
+    private final Runnable unlockTask = new Runnable() {
+        @Override public void run() {
+            unlockFired = true;
+            lockBtn.setPressed(false);
+            fireUnlock();
+        }
+    };
+
+    private void fireUnlock() {
+        if (config.feeds.isEmpty()) return;
+        Config.Feed feed = config.feeds.get(activeFeedIndex);
+        if (feed.lockHost == null || feed.lockHost.trim().isEmpty()) return;
+
+        showHint(getString(R.string.unlock_sending), 0L);
+        DoorLock.unlock(feed.lockHost, feed.lockSeconds, feed.lockPassword,
+                new DoorLock.Callback() {
+                    @Override public void onResult(final boolean ok, String detail) {
+                        ui.post(new Runnable() {
+                            @Override public void run() {
+                                if (ok) {
+                                    playTone(ToneGenerator.TONE_PROP_ACK, 250);
+                                    showHint(getString(R.string.unlock_ok), 2500L);
+                                } else {
+                                    playTone(ToneGenerator.TONE_PROP_NACK, 300);
+                                    showHint(getString(R.string.unlock_failed), 3000L);
+                                }
+                            }
+                        });
+                    }
+                });
+    }
+
+    private void playTone(int tone, int durationMs) {
+        if (tones == null) return;
+        try {
+            tones.startTone(tone, durationMs);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
     private void playReadyCue() {
         if (tones == null) return;
         try {
@@ -537,6 +727,8 @@ public class MainActivity extends Activity {
             return true;
         }
         resetIdleTimer();
+        // While framing, the video pane owns every touch inside it.
+        if (framing && handleFramingTouch(ev)) return true;
         // Counted first, but still passed through, so the page underneath keeps
         // working normally for anyone not performing the gesture.
         if (handleSecretCorner(ev)) return true;
@@ -612,6 +804,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        ui.removeCallbacks(unlockTask);       // a hold never survives leaving the screen
         talk.cancel();
         presence.stop();
         video.pause();
@@ -621,6 +814,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         ui.removeCallbacksAndMessages(null);
         talk.cancel();
+        admin.stop();
         if (tones != null) {
             tones.release();
             tones = null;

@@ -22,4 +22,12 @@
     <string name="talk_err_play">Talk-back could not start</string>
 
     <string name="ssl_rejected">Certificate rejected — allow it in Settings</string>
+    <string name="frame_edit">Adjust framing</string>
+    <string name="frame_editing">Pinch to zoom, drag to move — tap ✓ to save</string>
+    <string name="frame_saved">Framing saved</string>
+    <string name="unlock">Hold to open the door</string>
+    <string name="unlock_hold">Keep holding to open…</string>
+    <string name="unlock_sending">Opening…</string>
+    <string name="unlock_ok">Door open</string>
+    <string name="unlock_failed">Could not open the door</string>
 </resources>

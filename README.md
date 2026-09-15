@@ -17,6 +17,10 @@ that modern kiosk apps have left behind.
   again from inside the app.
 - **Portrait or landscape** — one layout tree, set to match your bracket, with the
   camera above/left of the web pane or below/right of it.
+- **Door lock** — hold a button to open a gate or door wired through a Shelly relay,
+  which relocks itself on a timer.
+- **Pinch-to-frame** — zoom and pan the camera picture on the panel itself.
+- **Remote admin** — edit feeds from a laptop browser instead of the touchscreen.
 - **Tap the picture** to toggle sound. Muted by default; the state is announced
   briefly on screen, since there is no permanent speaker icon.
 
@@ -61,6 +65,8 @@ visitor can wander into. Everything is a gesture:
 |---|---|
 | **Tap the picture** | Toggle sound. Muted at startup |
 | **Hold the mic button** | Push-to-talk, for cameras with two-way audio enabled |
+| **Hold the lock button for 1 s** | Open the door, for feeds with a Shelly lock configured. Releasing early cancels |
+| **Tap the crop button, pinch, drag, tap ✓** | Frame the picture; saved and restored on restart |
 | **5 taps, top-right of the web pane** | Open Settings |
 | **5 taps, top-left of the web pane** | Force reload of both the dashboard and the stream |
 | **Tap anywhere while dimmed** | Wake (the tap is swallowed, so it cannot press anything) |
@@ -90,6 +96,16 @@ rtsp://user:pass@HOST:554/h264Preview_01_sub    lower resolution
 
 The button strip hides itself automatically when only one feed is configured.
 
+Each feed can also carry a **door lock**: the IP of a Shelly Gen 2/3 relay, how many
+seconds to hold it open, and the Shelly password if authentication is enabled on the
+device. The unlock button appears only on feeds that have one. The request is
+`Switch.Set?id=0&on=true&toggle_after=N`, so the **Shelly switches itself back off** —
+relocking never depends on the tablet sending a second request, which matters because
+the tablet is precisely the thing that might drop off Wi-Fi mid-unlock.
+
+If Shelly authentication is off, anyone on your Wi-Fi can open the lock from a
+browser without the tablet. Enable it in the Shelly app.
+
 ### Dashboard
 
 | Setting | Notes |
@@ -105,8 +121,13 @@ The button strip hides itself automatically when only one feed is configured.
 | **Orientation** | Portrait, Landscape or Auto. A wall bracket has one orientation; Auto lets a knock rotate the display |
 | **Camera position** | Top/left or bottom/right of the web pane |
 | **Camera pane size** | Percent of the screen: height in portrait, width in landscape |
-| **Scale video to fill the pane** | Crops the overflow so the picture covers the pane. Off letterboxes the whole frame. A 16:9 feed in a 4:3-ish pane loses noticeable width when on |
-| **Video zoom** | `100` leaves scaling to libVLC. Higher zooms explicitly, relative to the source's native size — the fallback for streams that never report their geometry, where the automatic fit has nothing to compute from |
+
+The picture always fills its pane. **Framing is set on the panel**, not here: tap the crop
+button on the video, pinch to zoom (1–4×), drag to position, tap ✓. Zoom enlarges the
+video's container beyond the pane and pan shifts it, with the pane clipping the
+overflow — so libVLC still handles aspect ratio itself, and it works even on cameras
+that never report their resolution. Pan is stored relative to the pane, so framing
+survives changing the split or rotating the tablet.
 
 ### Button colours
 
@@ -124,6 +145,18 @@ the background's luma, so light colours stay readable.
 | **Motion pixel threshold** | Per-pixel luma delta counting as changed. Lower is more sensitive |
 | **Motion area trigger** | Fraction of sampled pixels (per mille) that must change. Raise it if sensor noise wakes the panel on its own |
 | **Stop the stream while dimmed** | Saves heat and bandwidth on a 24/7 device; costs a second or two on wake |
+
+### Remote admin
+
+| Setting | Notes |
+|---|---|
+| **Edit feeds from a browser** | Serves a settings page at the address shown, e.g. `http://192.168.0.50:8080` |
+| **Port** | Default 8080 |
+| **PIN** | Required — the server will not start without one. Any username, the PIN as password |
+
+The page covers feeds (including door locks) and the dashboard URL; everything else
+stays on the device. **It is plain HTTP, and feed URLs contain camera credentials**, so
+treat it as readable by anyone already on your Wi-Fi. It is off by default.
 
 ### Stream tuning
 

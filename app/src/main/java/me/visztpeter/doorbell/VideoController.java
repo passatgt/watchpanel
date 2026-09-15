@@ -140,22 +140,11 @@ public class VideoController {
 
     private void applyScaleNow() {
         if (player == null) return;
-        int zoom = config.videoZoomPercent;
         try {
-            if (zoom > 100) {
-                // Explicit factor relative to the source's native size. This is the
-                // fallback for streams whose geometry libVLC never reports, where
-                // FIT_SCREEN has nothing to compute a crop from.
-                player.setScale(zoom / 100f);
-                Log.i(TAG, "scale -> manual " + zoom + "%");
-            } else {
-                MediaPlayer.ScaleType want = config.videoFillPane
-                        ? MediaPlayer.ScaleType.SURFACE_FIT_SCREEN
-                        : MediaPlayer.ScaleType.SURFACE_BEST_FIT;
-                player.setScale(0f);        // 0 = let libVLC fit it
-                player.setVideoScale(want);
-                Log.i(TAG, "scale -> " + want);
-            }
+            // The picture always fills its container now; zoom and pan are done
+            // by resizing that container, not by rescaling the video.
+            player.setScale(0f);
+            player.setVideoScale(MediaPlayer.ScaleType.SURFACE_FIT_SCREEN);
         } catch (Exception e) {
             Log.w(TAG, "applying scale failed", e);
         }

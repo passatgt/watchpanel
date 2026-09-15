@@ -19,4 +19,12 @@
     <string name="talk_err_play">A visszabeszélés nem indult el</string>
 
     <string name="ssl_rejected">Érvénytelen tanúsítvány — engedélyezze a beállításokban</string>
+    <string name="frame_edit">Kép beállítása</string>
+    <string name="frame_editing">Csippentés a nagyításhoz, húzás a mozgatáshoz — ✓ a mentéshez</string>
+    <string name="frame_saved">Képkivágás mentve</string>
+    <string name="unlock">Tartsa nyomva az ajtónyitáshoz</string>
+    <string name="unlock_hold">Tartsa nyomva a nyitáshoz…</string>
+    <string name="unlock_sending">Nyitás…</string>
+    <string name="unlock_ok">Ajtó nyitva</string>
+    <string name="unlock_failed">Nem sikerült kinyitni az ajtót</string>
 </resources>

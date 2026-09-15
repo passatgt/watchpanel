@@ -34,15 +34,17 @@ public class SettingsActivity extends Activity {
 
     /** The widgets making up one feed's block in the form. */
     private static class FeedRow {
-        EditText name, url;
+        EditText name, url, lockHost, lockSeconds, lockPassword;
         CheckBox talk;
     }
 
     private EditText dashboardUrl, splitPercent, dimTimeout, activeBrightness, dimBrightness;
     private RadioGroup orientationGroup, cameraPosGroup, languageGroup;
     private EditText activeColor, inactiveColor;
-    private EditText motionThreshold, motionArea, webReload, networkCaching, videoZoom;
-    private CheckBox presenceEnabled, pauseWhenDim, ignoreSsl, rtspTcp, kioskMode, videoFill;
+    private EditText motionThreshold, motionArea, webReload, networkCaching;
+    private EditText adminPort, adminPin;
+    private CheckBox adminEnabled;
+    private CheckBox presenceEnabled, pauseWhenDim, ignoreSsl, rtspTcp, kioskMode;
 
     private boolean kioskWasEnabled;
 
@@ -70,12 +72,12 @@ public class SettingsActivity extends Activity {
         feedList = new LinearLayout(this);
         feedList.setOrientation(LinearLayout.VERTICAL);
         root.addView(feedList);
-        for (Config.Feed f : config.feeds) addFeedRow(f.name, f.url, f.talk);
+        for (Config.Feed f : config.feeds) addFeedRow(f);
 
         Button addFeed = new Button(this);
         addFeed.setText("+ Add feed");
         addFeed.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { addFeedRow("", "rtsp://", true); }
+            @Override public void onClick(View v) { addFeedRow(null); }
         });
         root.addView(addFeed);
 
@@ -104,12 +106,8 @@ public class SettingsActivity extends Activity {
                 config.cameraFirst ? "first" : "last",
                 "Where the camera sits relative to the web pane.");
         splitPercent = numberRow(root, "Camera pane size (% of screen, 20-80)", config.splitPercent);
-        videoFill = checkRow(root, "Scale video to fill the pane", config.videoFillPane,
-                "Crops whatever overflows. Uncheck to letterbox the whole frame.");
-        videoZoom = numberRow(root, "Video zoom (%, 100 = automatic)", config.videoZoomPercent);
-        label(root, "", "Some cameras never tell libVLC their resolution, which leaves "
-                + "the automatic fit with nothing to work from. Raise this until the "
-                + "picture covers the pane.");
+        label(root, "", "Framing is set on the panel itself: tap the crop button on the "
+                + "video, then pinch and drag. Far easier than typing numbers here.");
 
         header(root, "Button colours");
         activeColor = colorRow(root, "Selected camera", config.buttonActiveColor);
@@ -130,6 +128,16 @@ public class SettingsActivity extends Activity {
         networkCaching = numberRow(root, "Network caching (ms)", config.networkCachingMs);
         rtspTcp = checkRow(root, "RTSP over TCP", config.rtspOverTcp,
                 "Recommended for Reolink; UDP drops frames on busy Wi-Fi.");
+
+        header(root, "Remote admin");
+        adminEnabled = checkRow(root, "Edit feeds from a browser", config.adminEnabled,
+                "Serves a settings page on your LAN at " + lanUrl(config.adminPort) + " — "
+                + "far easier than typing RTSP URLs on the tablet.");
+        adminPort = numberRow(root, "Port", config.adminPort);
+        adminPin = textRow(root, "PIN (required)", config.adminPin, 0);
+        label(root, "", "Any username, this PIN as the password. Feed URLs contain your "
+                + "camera credentials and this is plain HTTP, so treat it as readable by "
+                + "anyone already on your Wi-Fi. Blank PIN keeps the server off.");
 
         header(root, "Kiosk");
         kioskMode = checkRow(root, "Run as home screen (kiosk)", config.kioskMode,
@@ -158,8 +166,12 @@ public class SettingsActivity extends Activity {
             String name = row.name.getText().toString().trim();
             String url = row.url.getText().toString().trim();
             if (url.isEmpty() || "rtsp://".equals(url)) continue;
-            config.feeds.add(new Config.Feed(name.isEmpty() ? "Camera" : name,
-                    url, row.talk.isChecked()));
+            Config.Feed feed = new Config.Feed(name.isEmpty() ? "Camera" : name,
+                    url, row.talk.isChecked());
+            feed.lockHost = row.lockHost.getText().toString().trim();
+            feed.lockSeconds = readInt(row.lockSeconds, 5, 1, 60);
+            feed.lockPassword = row.lockPassword.getText().toString();
+            config.feeds.add(feed);
         }
 
         config.language = readRadio(languageGroup, config.language);
@@ -171,8 +183,9 @@ public class SettingsActivity extends Activity {
         config.orientation = readRadio(orientationGroup, config.orientation);
         config.cameraFirst = "first".equals(
                 readRadio(cameraPosGroup, config.cameraFirst ? "first" : "last"));
-        config.videoFillPane = videoFill.isChecked();
-        config.videoZoomPercent = readInt(videoZoom, config.videoZoomPercent, 100, 400);
+        config.adminEnabled = adminEnabled.isChecked();
+        config.adminPort = readInt(adminPort, config.adminPort, 1024, 65535);
+        config.adminPin = adminPin.getText().toString().trim();
         config.buttonActiveColor = Config.parseColor(
                 activeColor.getText().toString(), config.buttonActiveColor);
         config.buttonInactiveColor = Config.parseColor(
@@ -201,7 +214,10 @@ public class SettingsActivity extends Activity {
 
     // ------------------------------------------------------------ row builders
 
-    private void addFeedRow(String name, String url, boolean talk) {
+    private void addFeedRow(Config.Feed src) {
+        String name = src == null ? "" : src.name;
+        String url = src == null ? "rtsp://" : src.url;
+        boolean talk = src == null || src.talk;
         final LinearLayout block = new LinearLayout(this);
         block.setOrientation(LinearLayout.VERTICAL);
         block.setPadding(0, dp(6), 0, dp(10));
@@ -241,6 +257,24 @@ public class SettingsActivity extends Activity {
         talkBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         block.addView(talkBox);
 
+        // Door lock: Shelly IP, unlock seconds, optional device password.
+        LinearLayout lockRow = new LinearLayout(this);
+        lockRow.setOrientation(LinearLayout.HORIZONTAL);
+        final EditText lockHostField = smallField("Door lock: Shelly IP (optional)",
+                src == null ? "" : src.lockHost, 2.2f);
+        lockHostField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        final EditText lockSecondsField = smallField("Seconds",
+                String.valueOf(src == null ? 5 : src.lockSeconds), 0.8f);
+        lockSecondsField.setInputType(InputType.TYPE_CLASS_NUMBER);
+        final EditText lockPasswordField = smallField("Shelly password",
+                src == null ? "" : src.lockPassword, 1.4f);
+        lockPasswordField.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        lockRow.addView(lockHostField);
+        lockRow.addView(lockSecondsField);
+        lockRow.addView(lockPasswordField);
+        block.addView(lockRow);
+
         TextView hint = new TextView(this);
         hint.setText("Needs an RTSP camera with an ONVIF audio backchannel.");
         hint.setTextColor(0xFF8899AA);
@@ -252,6 +286,9 @@ public class SettingsActivity extends Activity {
         entry.name = nameField;
         entry.url = urlField;
         entry.talk = talkBox;
+        entry.lockHost = lockHostField;
+        entry.lockSeconds = lockSecondsField;
+        entry.lockPassword = lockPasswordField;
 
         remove.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -365,6 +402,40 @@ public class SettingsActivity extends Activity {
         if (id == -1) return fallback;
         View v = g.findViewById(id);
         return (v != null && v.getTag() != null) ? v.getTag().toString() : fallback;
+    }
+
+    /** Best-effort LAN address, so the settings screen can show a usable URL. */
+    private static String lanUrl(int port) {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> ifs =
+                    java.net.NetworkInterface.getNetworkInterfaces();
+            while (ifs.hasMoreElements()) {
+                java.net.NetworkInterface ni = ifs.nextElement();
+                if (ni.isLoopback() || !ni.isUp()) continue;
+                java.util.Enumeration<java.net.InetAddress> addrs = ni.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    java.net.InetAddress a = addrs.nextElement();
+                    if (a instanceof java.net.Inet4Address) {
+                        return "http://" + a.getHostAddress() + ":" + port;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "http://<tablet-ip>:" + port;
+    }
+
+    private EditText smallField(String hint, String value, float weight) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setText(value);
+        e.setSingleLine(true);
+        e.setTextColor(0xFFFFFFFF);
+        e.setHintTextColor(0xFF6F7C88);
+        e.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        e.setLayoutParams(new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, weight));
+        return e;
     }
 
     private void header(LinearLayout parent, String text) {

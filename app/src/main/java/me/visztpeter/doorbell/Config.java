@@ -28,6 +28,15 @@ public class Config {
          */
         public boolean talk;
 
+        /**
+         * Shelly relay that opens the door this camera looks at. Empty means the
+         * feed has no lock and no unlock button. Password only if Shelly
+         * authentication is enabled on the device.
+         */
+        public String lockHost = "";
+        public int lockSeconds = 5;
+        public String lockPassword = "";
+
         public Feed(String name, String url, boolean talk) {
             this.name = name;
             this.url = url;
@@ -62,6 +71,15 @@ public class Config {
     /** Muted by default: a wall panel should not start talking on its own. */
     public boolean audioMuted = true;
 
+    /**
+     * LAN admin page, for editing feeds from a laptop instead of the tablet.
+     * Off by default and inert without a PIN: feed URLs embed camera
+     * credentials and this serves them over plain HTTP.
+     */
+    public boolean adminEnabled = false;
+    public int adminPort = 8080;
+    public String adminPin = "";
+
     /** "system", "en" or "hu". Applies to the on-screen overlays. */
     public String language = "system";
 
@@ -72,12 +90,16 @@ public class Config {
     public boolean videoFillPane = true;
 
     /**
-     * Manual zoom as a percentage of the source's native size. 100 leaves it to
-     * libVLC's own fitting. Needed because some RTSP sources never report their
-     * geometry to libVLC, which leaves its automatic scaling with nothing to
-     * compute from; an explicit factor sidesteps that entirely.
+     * Framing set by pinch and drag in the app rather than typed here.
+     *
+     * The picture always fills the pane; zoom enlarges the video's container
+     * beyond it and pan slides it, with the parent clipping the overflow. That
+     * way libVLC still handles aspect internally, so this works even for the
+     * cameras that never report their resolution.
      */
-    public int videoZoomPercent = 100;
+    public float videoZoom = 1.0f;      // 1.0 = exactly fills the pane
+    public float videoPanX = 0f;        // -1..1, 0 = centred
+    public float videoPanY = 0f;
 
     /** Window brightness while awake / while dimmed. 0..1. */
     public float activeBrightness = 1.0f;
@@ -166,7 +188,12 @@ public class Config {
         audioMuted = o.optBoolean("audioMuted", audioMuted);
         language = o.optString("language", language);
         videoFillPane = o.optBoolean("videoFillPane", videoFillPane);
-        videoZoomPercent = o.optInt("videoZoomPercent", videoZoomPercent);
+        videoZoom = (float) o.optDouble("videoZoom", videoZoom);
+        videoPanX = (float) o.optDouble("videoPanX", videoPanX);
+        videoPanY = (float) o.optDouble("videoPanY", videoPanY);
+        adminEnabled = o.optBoolean("adminEnabled", adminEnabled);
+        adminPort = o.optInt("adminPort", adminPort);
+        adminPin = o.optString("adminPin", adminPin);
         activeBrightness = (float) o.optDouble("activeBrightness", activeBrightness);
         dimBrightness = (float) o.optDouble("dimBrightness", dimBrightness);
         dimTimeoutSec = o.optInt("dimTimeoutSec", dimTimeoutSec);
@@ -187,8 +214,12 @@ public class Config {
         if (arr != null) {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject f = arr.getJSONObject(i);
-                feeds.add(new Feed(f.optString("name", "Cam " + (i + 1)),
-                        f.optString("url", ""), f.optBoolean("talk", true)));
+                Feed feed = new Feed(f.optString("name", "Cam " + (i + 1)),
+                        f.optString("url", ""), f.optBoolean("talk", true));
+                feed.lockHost = f.optString("lockHost", "");
+                feed.lockSeconds = f.optInt("lockSeconds", 5);
+                feed.lockPassword = f.optString("lockPassword", "");
+                feeds.add(feed);
             }
         }
     }
@@ -203,7 +234,12 @@ public class Config {
             o.put("audioMuted", audioMuted);
             o.put("language", language);
             o.put("videoFillPane", videoFillPane);
-            o.put("videoZoomPercent", videoZoomPercent);
+            o.put("videoZoom", videoZoom);
+            o.put("videoPanX", videoPanX);
+            o.put("videoPanY", videoPanY);
+            o.put("adminEnabled", adminEnabled);
+            o.put("adminPort", adminPort);
+            o.put("adminPin", adminPin);
             o.put("activeBrightness", activeBrightness);
             o.put("dimBrightness", dimBrightness);
             o.put("dimTimeoutSec", dimTimeoutSec);
@@ -225,6 +261,9 @@ public class Config {
                 fo.put("name", f.name);
                 fo.put("url", f.url);
                 fo.put("talk", f.talk);
+                fo.put("lockHost", f.lockHost);
+                fo.put("lockSeconds", f.lockSeconds);
+                fo.put("lockPassword", f.lockPassword);
                 arr.put(fo);
             }
             o.put("feeds", arr);

@@ -60,6 +60,31 @@
                     android:visibility="gone"
                     android:src="@android:drawable/ic_btn_speak_now" />
 
+                <ImageButton
+                    android:id="@+id/lockBtn"
+                    android:layout_width="76dp"
+                    android:layout_height="76dp"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:layout_margin="14dp"
+                    android:padding="20dp"
+                    android:scaleType="fitCenter"
+                    android:background="@drawable/lock_button"
+                    android:contentDescription="@string/unlock"
+                    android:visibility="gone"
+                    android:src="@android:drawable/ic_lock_lock" />
+
+                <ImageButton
+                    android:id="@+id/frameBtn"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_gravity="bottom|start"
+                    android:layout_margin="14dp"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:background="@drawable/talk_button"
+                    android:contentDescription="@string/frame_edit"
+                    android:src="@android:drawable/ic_menu_crop" />
+
                 <TextView
                     android:id="@+id/muteHint"
                     android:layout_width="wrap_content"
